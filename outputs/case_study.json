@@ -1,0 +1,17 @@
+{
+  "norad_id": 36413,
+  "t0_epoch": "2026-03-15T17:11:42.201888+00:00",
+  "reference_tle_epoch": "2026-03-09T11:22:58.519488+00:00",
+  "sgp4": {
+    "error_km": 0.6470620965253496,
+    "comparable": false,
+    "within_normal": false,
+    "epoch_delta_hours": 173.81213400000001,
+    "reason": "reference TLE epoch is 173.81 h from evaluation time; outside the 12.0 h window. SGP4 is not valid for this comparison \u2014 do not treat the error as a maneuver test."
+  },
+  "ground_track": {
+    "n_passes": 1,
+    "n_region_samples": 4
+  },
+  "visibility": null
+}

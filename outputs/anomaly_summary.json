@@ -1,0 +1,41 @@
+{
+  "n_leo": 58,
+  "contamination_assumption": 0.05,
+  "z_threshold": 3.0,
+  "single_counts": {
+    "mean_altitude_km": 2,
+    "inclination_deg": 0,
+    "eccentricity": 1
+  },
+  "single_union": 2,
+  "fusion_count": 3,
+  "fusion_fraction": 0.05172413793103448,
+  "fusion_only": 1,
+  "jaccard_union_vs_fusion": 0.6666666666666666,
+  "top10": [
+    {
+      "name": "HIGH-ECC-DESIGNED",
+      "norad_id": 52001,
+      "mean_altitude_km": 1116.4162171415055,
+      "inclination_deg": 63.4,
+      "eccentricity": 0.25,
+      "fusion_score": 0.8155485090934546
+    },
+    {
+      "name": "YAOGAN-9 01A",
+      "norad_id": 36413,
+      "mean_altitude_km": 1095.319422373188,
+      "inclination_deg": 63.3646,
+      "eccentricity": 0.0529596,
+      "fusion_score": 0.7706009351593661
+    },
+    {
+      "name": "VERY-LOW-LEO",
+      "norad_id": 52002,
+      "mean_altitude_km": 253.98029145161763,
+      "inclination_deg": 51.6,
+      "eccentricity": 0.0012,
+      "fusion_score": 0.7120287018316221
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "region": "Jinju",
+  "source": "offline-synthetic",
+  "period_a": {
+    "start": "2024-08-01",
+    "end": "2024-08-31",
+    "n_images": 4,
+    "mean_ndvi": 0.42
+  },
+  "period_b": {
+    "start": "2025-03-01",
+    "end": "2025-03-31",
+    "n_images": 3,
+    "mean_ndvi": 0.18
+  },
+  "delta": -0.24,
+  "caveat": "August vs March NDVI is dominated by the ordinary seasonal cycle. A decrease here is not evidence about YAOGAN-9 or any TLE flag."
+}

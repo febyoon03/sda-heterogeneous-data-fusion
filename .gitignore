@@ -1,0 +1,9 @@
+__pycache__/
+.pytest_cache/
+*.bsp
+
+# Note: outputs/ IS committed — it's the demo-scale (fixture-catalog) pipeline
+# run, kept as evidence the toolkit actually runs end-to-end. Re-running will
+# overwrite these files in place; that's expected.
+
+.DS_Store

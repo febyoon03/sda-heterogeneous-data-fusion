@@ -1,0 +1,81 @@
+{
+  "anomaly": {
+    "n_leo": 58,
+    "contamination_assumption": 0.05,
+    "z_threshold": 3.0,
+    "single_counts": {
+      "mean_altitude_km": 2,
+      "inclination_deg": 0,
+      "eccentricity": 1
+    },
+    "single_union": 2,
+    "fusion_count": 3,
+    "fusion_fraction": 0.05172413793103448,
+    "fusion_only": 1,
+    "jaccard_union_vs_fusion": 0.6666666666666666,
+    "top10": [
+      {
+        "name": "HIGH-ECC-DESIGNED",
+        "norad_id": 52001,
+        "mean_altitude_km": 1116.4162171415055,
+        "inclination_deg": 63.4,
+        "eccentricity": 0.25,
+        "fusion_score": 0.8155485090934546
+      },
+      {
+        "name": "YAOGAN-9 01A",
+        "norad_id": 36413,
+        "mean_altitude_km": 1095.319422373188,
+        "inclination_deg": 63.3646,
+        "eccentricity": 0.0529596,
+        "fusion_score": 0.7706009351593661
+      },
+      {
+        "name": "VERY-LOW-LEO",
+        "norad_id": 52002,
+        "mean_altitude_km": 253.98029145161763,
+        "inclination_deg": 51.6,
+        "eccentricity": 0.0012,
+        "fusion_score": 0.7120287018316221
+      }
+    ]
+  },
+  "yaogan9_in_catalog": true,
+  "yaogan9_fusion_flag": true,
+  "yaogan9_score": 0.7706009351593661,
+  "case_study": {
+    "norad_id": 36413,
+    "t0_epoch": "2026-03-15T17:11:42.201888+00:00",
+    "reference_tle_epoch": "2026-03-09T11:22:58.519488+00:00",
+    "sgp4": {
+      "error_km": 0.6470620965253496,
+      "comparable": false,
+      "within_normal": false,
+      "epoch_delta_hours": 173.81213400000001,
+      "reason": "reference TLE epoch is 173.81 h from evaluation time; outside the 12.0 h window. SGP4 is not valid for this comparison \u2014 do not treat the error as a maneuver test."
+    },
+    "ground_track": {
+      "n_passes": 1,
+      "n_region_samples": 4
+    },
+    "visibility": null
+  },
+  "eo": {
+    "region": "Jinju",
+    "source": "offline-synthetic",
+    "period_a": {
+      "start": "2024-08-01",
+      "end": "2024-08-31",
+      "n_images": 4,
+      "mean_ndvi": 0.42
+    },
+    "period_b": {
+      "start": "2025-03-01",
+      "end": "2025-03-31",
+      "n_images": 3,
+      "mean_ndvi": 0.18
+    },
+    "delta": -0.24,
+    "caveat": "August vs March NDVI is dominated by the ordinary seasonal cycle. A decrease here is not evidence about YAOGAN-9 or any TLE flag."
+  }
+}
