@@ -1,4 +1,4 @@
-# SDA Heterogeneous Data Fusion — Toolkit
+# SDA Heterogeneous Data Fusion - Toolkit
 
 *Presented at Yonsei Aerospace Week 2026 (May 2026) — Excellence Award. Rewritten and audited in August 2026 before publishing to GitHub — read this whole README before citing any number from this project.*
 
@@ -17,7 +17,7 @@ The version of this code that produced the numbers presented at the symposium �
 - The ground-track "n passes over Korea" counted 5-minute *samples* inside a lat/lon box, not discrete passes — a single 15-minute pass could count as 3.
 - The NDVI figure title still said "Cross-validation of TLE Anomaly Detection" after that framing had already been withdrawn elsewhere.
 
-None of this means the underlying research idea is wrong — TLE-based outlier flagging, SGP4 follow-up, and optical-visibility geometry are all legitimate techniques. It means **the specific numbers above rest on a specific catalog pull and a specific incorrect station table, and can't be reproduced or defended asstated.** The fix wasn't to patch the numbers — it was to rewrite the toolkit so it structurally can't make these mistakes again, and to test that.
+None of this means the underlying research idea is wrong — TLE-based outlier flagging, SGP4 follow-up, and optical-visibility geometry are all legitimate techniques. It means **the specific numbers above rest on a specific catalog pull and a specific incorrect station table, and can't be reproduced or defended as stated.** The fix wasn't to patch the numbers — it was to rewrite the toolkit so it structurally can't make these mistakes again, and to test that.
 
 ## What's in this repo now
 
