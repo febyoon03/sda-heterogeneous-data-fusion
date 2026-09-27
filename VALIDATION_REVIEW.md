@@ -1,247 +1,119 @@
-# Validation review — original scripts vs. rewritten toolkit
+# Validation review: original scripts vs. rewritten toolkit
 
-Reviewed artifacts: the four standalone scripts in
-`sda-heterogeneous-data-fusion.zip` (anomaly detection, SGP4/OWL-Net,
-ground track, Landsat NDVI) plus their READMEs.
+This review looked at the four standalone scripts in `sda-heterogeneous-data-fusion.zip` (anomaly detection, SGP4/OWL‑Net, ground track, Landsat NDVI) and their READMEs.
 
-This is not a web app. There is no user auth, billing, or campaign module.
-Those review questions are mapped onto the actual systems: data access,
-experiment stages, and candidate state.
+This is not a web app, so it has no user accounts, billing, or marketing campaigns. The usual review questions are simply asked about the real parts of this project instead: how data is accessed, how each experiment runs, and how a candidate object's state is tracked.
 
 ---
 
-## 1. One-line summary
+## 1. One‑line summary
 
-Four Colab-style notebooks that *narrate* a 3-layer SDA fusion pipeline
-but *run* as disconnected scripts with hardcoded TLEs, a live Celestrak
-pull used as if it were t24, incorrect OWL-Net geography, a guaranteed
-5% IsolationForest rate, and an NDVI experiment whose figure title still
-claims cross-validation.
+These are four Colab‑style notebooks. In writing, they describe a 3‑layer SDA fusion pipeline. In practice, they run as four disconnected scripts with hardcoded satellite data, a live Celestrak download used as if it were a fixed 24‑hour‑later snapshot, wrong OWL‑Net station locations, an anomaly model that is forced to always flag exactly 5% of the data, and an NDVI chart whose title still claims something the project had already withdrawn.
 
 ---
 
-## 2. Responsibility boundaries
+## 2. What each file was supposed to do
 
-### What each original file claimed to own
-
-| Script | Claimed responsibility | Actual responsibility at runtime |
+| Script | What it claimed to do | What it actually did |
 |---|---|---|
-| `isolation_forest_detection.py` | Flag LEO TLE outliers; produce the candidate list the rest of the pipeline uses | Parse a Colab upload, print counts, save one PNG. Writes no candidate list. |
-| `sgp4_owlnet_validation.py` | Physically check one flagged object; measure OWL-Net observability | Hardcodes YAOGAN-9 t0; fetches *current* TLE; mixes measured geometry with invented RF multipliers. |
-| `ground_track.py` | Show why this satellite and Korea matter | Independent copy of the same TLE; counts samples, not passes. |
-| `ndvi_landsat_pipeline.py` | Demonstrate a third modality after withdrawing the validation claim | Still titles the figure “Cross-validation of TLE Anomaly Detection”. |
+| `isolation_forest_detection.py` | Flag unusual LEO orbits and produce the candidate list the rest of the pipeline uses | Reads a file uploaded through Colab, prints some counts, saves one image. Never writes out a candidate list. |
+| `sgp4_owlnet_validation.py` | Physically check one flagged object; measure whether OWL‑Net can actually see it | Hardcodes one satellite's starting orbit; downloads whatever the *current* TLE happens to be; mixes real geometry with invented RF multipliers. |
+| `ground_track.py` | Show why this satellite and Korea matter | Keeps its own separate copy of the same TLE; counts data samples, not actual passes. |
+| `ndvi_landsat_pipeline.py` | Demonstrate a third, independent data source after the validation claim had already been withdrawn | Chart is still titled "Cross‑validation of TLE Anomaly Detection." |
 
-One-sentence ownership after the rewrite:
+After the rewrite, each part has one clear job:
 
-- `sda_fusion.tle` — parse and checksum TLE text.
-- `sda_fusion.orbit` — Keplerian elements from a TLE.
-- `sda_fusion.anomaly` — unsupervised flagging policy.
-- `sda_fusion.sgp4_validate` — epoch-gated position comparison.
-- `sda_fusion.visibility` — optical window geometry.
-- `sda_fusion.ground_track` — sub-satellite sampling and pass counting.
-- `sda_fusion.eo` — NDVI demo orchestration.
-- `sda_fusion.providers.celestrak` / `earthengine` — removable I/O.
+- `sda_fusion.tle` parses and checks TLE text.
+- `sda_fusion.orbit` turns a TLE into orbital elements.
+- `sda_fusion.anomaly` decides which objects to flag.
+- `sda_fusion.sgp4_validate` compares positions only when the time gap is valid.
+- `sda_fusion.visibility` handles the geometry of what can be seen and when.
+- `sda_fusion.ground_track` counts real passes.
+- `sda_fusion.eo` runs the NDVI demo.
+- `sda_fusion.providers.celestrak` / `earthengine` handle all outside data access, and can be removed or swapped without touching the science code.
 
-Why those cuts: TLE checksum does not belong next to IsolationForest;
-station coordinates do not belong next to SGP4 error bars; GEE types must
-not leak into orbit math.
+These boundaries matter for a simple reason: TLE checksums have nothing to do with IsolationForest, station coordinates have nothing to do with SGP4 error numbers, and Earth Engine's data types should never leak into orbit math.
 
-Blast radius in the original: changing the YAOGAN-9 TLE required editing
-two files by hand. Changing OWL-Net sites required editing the SGP4
-script. Changing the anomaly definition had no effect on the case study
-because nothing consumed the anomaly output.
+In the original code, changing one satellite's TLE meant editing two files by hand. Changing the OWL‑Net station list meant editing the SGP4 script directly. And changing how anomalies were defined had no effect on the case study at all, because the case study never actually used the anomaly output.
 
 ---
 
-## 3. Actual execution flow
+## 3. How the code actually ran
 
-### Original success path (as written)
+### The original scripts, step by step
 
-**Anomaly script**
+**Anomaly script.** There was no real input step: it simply assumed a Colab variable called `uploaded` already existed. Each TLE line was only checked with `if t1.startswith('1') and t2.startswith('2')`, and any error was silently ignored with a bare `except: continue`. Values were read directly from fixed character positions in each line. The script fit an IsolationForest model, saved one chart, and printed some tables. All of this lived only in memory. Nothing was saved as a candidate list that another script could use.
 
-1. Request: there is no request. A Colab global `uploaded` is assumed.
-2. Validation: `if t1.startswith('1') and t2.startswith('2')`. Bare `except: continue`.
-3. State read: every 3-line group; inclination `[8:16]`, ecc `'0.'+[26:33]`, mean motion `[52:63]`.
-4. Side effects: IsolationForest fit; `plt.savefig('anomaly_detection_fusion.png')`; stdout tables.
-5. Success residue: a DataFrame in memory and a PNG. No CSV, no NORAD list, no handoff.
+**SGP4 / OWL‑Net script.** It started from one hardcoded satellite's TLE, loaded it into Skyfield, and set that as time t0. It then downloaded a satellite record from Celestrak for the same object. If that download failed to parse, the "t24" TLE was simply left empty. When a TLE was returned, the script compared position at t0 versus at t24 and reported the distance between them using a fixed 5 km threshold. It also loaded a planetary ephemeris file, ran 4,320 one‑minute time steps across three ground stations, and checked whether the satellite was sunlit, above 10° elevation, and the sky was dark enough. Finally, it multiplied the resulting visibility number by 2.0 and 2.8 to produce "RF" and "fusion" numbers, capped at 88% and 95%, and saved two images to whatever folder the script happened to be run from.
 
-**SGP4 / OWL-Net script**
+When something went wrong, the behavior was inconsistent. A network error was printed, and only the first experiment was skipped, while the second one kept running on outdated data. A malformed Celestrak response was also just printed and skipped, with no real error handling. There was no checksum check, so a corrupted line of text could silently be read as a different satellite entirely. If the ephemeris file failed to download, the whole program crashed partway through. And the only real safety check in the whole script was whether a TLE object existed at all, not whether it was actually valid.
 
-1. Hardcoded t0 TLE → Skyfield `EarthSatellite` → epoch `t0`.
-2. HTTP GET `gp.php?CATNR=36413`. On any parse failure, `tle1_t24` stays `None`.
-3. If a TLE came back: `sat_t0.at(t24)` vs `sat_t24.at(t24)`, Euclidean error, 5 km policy.
-4. Load DE421; 4320 one-minute samples; three stations; sunlit ∩ elev>10° ∩ sun<-10°.
-5. Multiply station-average “probability” by 2.0 and 2.8, cap at 88% / 95%.
-6. Save two PNGs in the current working directory.
-
-**Failure path, original SGP4**
-
-- Network exception: printed, Experiment A skipped, Experiment B still runs on t0.
-- Short Celestrak body: printed “형식이 다릅니다”, Experiment A skipped.
-- No checksum check, so a truncated line can become a wrong satellite.
-- DE421 download failure: uncaught, process dies after A.
-- `if tle1_t24:` is the only gate; `tle2_t24` is trusted implicitly.
-
-### Rewritten success / failure path
-
-1. `load_catalog` or bundled fixture → checksummed `TwoLineElement`s.
-2. Optional `flag_anomalies` → `anomaly_candidates.csv` + summary JSON.
-3. Case study always starts from the bundled t0 TLE (the presentation object).
-4. `compare_propagation(t0, t_ref)` computes the error **and** the epoch gap.
-   If the gap > 12 h, `comparable=False` and `within_normal=False` even if
-   the number is small.
-5. Visibility is skipped or run with a real station table. No RF multiplier.
-6. EO default is offline; live GEE is behind `providers.earthengine`.
+**Rewritten version.** A catalog is loaded, either from a real source or from a bundled sample file, and every TLE is checksum‑validated before use. Anomaly flagging is optional, and when it runs, it writes out both a CSV of candidates and a JSON summary. The case study always starts from the same bundled, known‑good TLE. When comparing two time points, the code checks not just the distance between them, but also the actual time gap. If that gap is more than 12 hours, the comparison is explicitly marked as invalid, even if the resulting number happens to look small and convincing. Visibility calculations either use a real, verified station table or are skipped entirely, with no invented RF multiplier anywhere. The NDVI step defaults to a clearly offline mode, with any live Earth Engine access isolated in its own separate module.
 
 ---
 
-## 4. Auth / state / communication
+## 4. Access, state, and how the pieces talk to each other
 
-### Auth
+**Access.** There are no user accounts in this project, so the closest thing to an authentication problem is how the code trusts outside data sources. Celestrak needs no login at all, yet the original script still faked a browser identity string out of habit; the rewrite instead sends an honest, clearly labeled research identifier. A specific Earth Engine project ID was hardcoded directly inside the NDVI math itself, mixing an access detail into the science code; the rewrite moves that into its own separate access module. The anomaly script also could not run outside of Google Colab, since it depended on a Colab‑only variable to get its input file. With these problems fixed, all of the core calculations (anomaly scoring, SGP4 comparison, visibility geometry) can now be tested completely on their own, with no outside service needed.
 
-There are no users. The auth-shaped problems are credentials and trust of
-external catalogs.
+**State.** There was no lasting memory of anything between runs. The only thing genuinely worth remembering, "this satellite was flagged, and here is its starting TLE," was never actually saved anywhere. The specific satellite used in the case study (YAOGAN‑9) was simply assumed to be a good example from the start; the anomaly script never actually selected it. If a future anomaly run didn't flag that satellite at all, the case‑study scripts would still go ahead and analyze it anyway.
 
-- Celestrak is unauthenticated. The original script spoofed
-  `User-Agent: Mozilla/5.0`. That is not a reason Skyfield or Celestrak
-  need a browser UA; it is a habit. The rewrite sends an explicit research UA.
-- Earth Engine project `sda-tle-analysis` is hardcoded next to NDVI math.
-  Auth is smeared into the science script. The rewrite isolates
-  `ee.Initialize` in `providers.earthengine`.
-- The anomaly script cannot run outside Colab (`filename = list(uploaded.keys())[0]`).
-  That is session state used as a public interface.
-
-Business logic (z-score, SGP4 difference, altaz) can now be tested without
-Celestrak or GEE.
-
-### State
-
-There is no persistent campaign state. The only state that should have
-existed is “this NORAD id was flagged, here is its t0 TLE.” It never
-existed on disk.
-
-YAOGAN-9 is *asserted* to be a fusion candidate. The anomaly script never
-selects it. If a future catalog run does not flag 36413, the case-study
-scripts still analyze it.
-
-### Communication
-
-Original: none. Shared knowledge is comments and duplicated TLE strings.
-
-Rewrite: dataclasses in memory, JSON/CSV on disk, CLI as the only
-cross-experiment surface. No circular imports. Removing Celestrak or GEE
-is `providers/*` plus a fixture fallback.
+**Communication.** The original scripts had no real way of sharing information with each other; everything that connected them was just a comment or a copy‑pasted TLE string. The rewrite fixes this with structured data passed between steps, saved to disk as JSON or CSV files, and one shared command‑line interface tying all the experiments together.
 
 ---
 
-## 5. Tight coupling and break points
+## 5. Where the original code was too tightly tangled together
 
-- TLE string duplicated in SGP4 and ground-track scripts. Change one, the
-  figures disagree.
-- Altitude and mean motion both fed to IsolationForest. Dropping either
-  changes scores; the original could not drop one without editing the
-  plot labels by hand.
-- `contamination=0.05` is bound to the headline “695 (5.0%)”. Changing
-  the parameter silently changes the published rate.
-- RF multipliers 2.0 / 2.8 live in the visibility function. Adding a real
-  RF source would have been another `* factor` instead of a new module.
-- Figure titles encode claims (“Multi-Source Fusion”, “Cross-validation”).
+The same satellite TLE was copy‑pasted into both the SGP4 script and the ground‑track script, so changing one without the other would make the resulting charts disagree with each other. Both altitude and mean motion were fed into the anomaly model even though they measure closely related things, so removing either one would silently change every score, and there was no way to do that without also editing chart labels by hand. The "695 candidates (5.0%)" headline number was directly tied to one hardcoded setting in the anomaly model, so changing that one number would have silently changed the published result. The fake RF multipliers of 2.0 and 2.8 lived inside the same function that calculated real visibility geometry, so adding an actual RF sensor later would have just meant multiplying by yet another made‑up number instead of building a real module. And the chart titles themselves made specific claims ("Multi‑Source Fusion," "Cross‑validation") that were no longer true by the time anyone read them.
 
-If Celestrak disappeared tomorrow, the original SGP4 experiment had no
-fixture path. The rewrite runs Experiment A on bundled TLEs and refuses
-the maneuver interpretation when epochs do not match.
+If Celestrak had gone offline entirely, the original SGP4 experiment would have had no way to run at all. The rewritten version can still run its case study on bundled sample data, and correctly refuses to interpret two mismatched time points as a real maneuver.
 
 ---
 
-## 6. Why this abstraction (and what was given up)
+## 6. Why this design, and what it gives up
 
-Original abstraction: “one script per figure.” Cheap to present, expensive
-to change, impossible to test.
+The original design was essentially "one script per chart." Cheap to put together for a presentation, expensive to change later, and effectively impossible to test.
 
-Rewrite: a small library + thin experiment wrappers.
+The rewrite instead uses a small, shared code library with thin wrapper scripts around it for each experiment. What was given up is the convenience of a single file you can paste directly into Colab. What was gained is checksum testing, corrected station data, a real time‑gap safety check, and the ability to remove Earth Engine entirely without breaking anything else.
 
-Given up: single-file Colab paste. Gained: checksum tests, station
-corrections, epoch guard, removable GEE.
-
-Alternatives not taken:
-
-- Full database + queue. Not earned by four experiments.
-- Event bus between anomaly and SGP4. A CSV is enough.
-- Keeping RF bars “for the poster look.” They are not measurements.
+A few heavier alternatives were considered and deliberately not used: a full database with a task queue was not worth building for just four experiments; a full event‑driven system connecting the anomaly detector to the SGP4 script wasn't necessary either, since a CSV file does the same job; and keeping the fake RF bars purely "because they looked good on the poster" was rejected outright, since they were never real measurements to begin with.
 
 ---
 
-## 7. Explanation vs. runtime mismatches
+## 7. Where the explanation and the actual numbers didn't match
 
-| Claim | Runtime |
+| Claim | What actually happened |
 |---|---|
-| Fusion flags 695 (5.0%) | `IsolationForest(contamination=0.05)` *sets* that fraction. |
-| Fusion list is what SGP4 uses | SGP4 hardcodes 36413. |
-| t24 TLE from Celestrak | Latest catalog TLE, any epoch. README even warns re-runs change the number, then still calls it t24. |
-| 0.20 km result | Measured once in March 2026. Not recoverable from the script as written after the catalog moves. |
-| Optical detection probability 4.1% | (sunlit ∩ night ∩ elev) / (elev) × 0.5. A weather-discounted visibility ratio. |
-| +RF 8.1%, fusion 11.4% | `avg * 2.0`, `avg * 2.8`, caps 88/95. No RF data. |
-| OWL-Net 레몬산 at 35.30°N, 129.10°E | Mt. Lemmon is ~32.44°N, 110.79°W. 소백산 is not an OWL-Net site. |
-| Astronomical night | Sun < −10°, not −18°. |
-| 한반도 통과 횟수 | Number of 5-minute samples in a box, not passes. |
-| Ground-track date 2026-03-16 00:00 | TLE epoch is 2026-03-15 17:11 UTC. |
-| NDVI “pipeline demo” | Figure title: “Cross-validation of TLE Anomaly Detection”. |
-| Landsat C2 NDVI | `normalizedDifference` on unscaled SR integers (offset −0.2). |
-| YAOGAN-9 ecc 0.053 is “ANOMALOUS” | Design of the 2010-009 ELINT trio (~700 × 1490 km, 63.4°). Unusual in a LEO cloud, not a surprise maneuver. |
-| 3-layer fusion | TLE measured + EO demo + RF projection. README already admits “1.5-source.” The scripts still print 3-source percentages. |
+| Fusion flags 695 candidates (5.0%) | `IsolationForest(contamination=0.05)` **sets** that fraction in advance. It was never really discovered. |
+| The fusion list is what SGP4 uses | SGP4 hardcodes one satellite (NORAD ID 36413), regardless of what the anomaly detector found. |
+| "t24" TLE came from Celestrak, 24 hours later | It was just whatever the latest catalog entry happened to be, at any epoch. The README even warns re‑runs change the number, but still calls it "t24." |
+| 0.20 km result | Measured once, in March 2026. Can't be reliably reproduced from the script since the catalog keeps moving. |
+| Optical detection probability 4.1% | (sunlit ∩ night ∩ elevation) ÷ (elevation), then × an arbitrary 0.5 weather discount. |
+| +RF 8.1%, fusion 11.4% | Just `optical average × 2.0` and `× 2.8`, capped at 88% / 95%. No real RF data. |
+| "Mt. Lemmon" station is in Korea at 35.30°N, 129.10°E | Mt. Lemmon is actually in Arizona, at about 32.44°N, 110.79°W. A second listed station, Sobaeksan, is not an OWL‑Net site at all. |
+| Astronomical night | Used sun altitude below −10°, when the correct threshold is below −18°. |
+| Number of passes over Korea | Actually a count of 5‑minute samples inside a map box, not real passes. |
+| Ground‑track date 2026‑03‑16 00:00 | The TLE's real epoch is 2026‑03‑15 17:11 UTC. |
+| NDVI is a simple pipeline demo | Chart title still reads "Cross‑validation of TLE Anomaly Detection." |
+| Landsat Collection‑2 NDVI, correctly calculated | `normalizedDifference` was applied to unscaled raw integers, without the required −0.2 offset. |
+| YAOGAN‑9's 0.053 eccentricity is "anomalous" | It reflects the known, deliberate design of the 2010‑009 ELINT satellite trio (~700 × 1490 km, 63.4° inclination). Unusual next to a sun‑synchronous catalog, not evidence of a maneuver. |
+| 3‑layer, 3‑source fusion | Really one real measured layer (TLE), one offline demo layer (EO), and one entirely invented projection (RF). The README already admits it's closer to "1.5 sources." |
 
-Intended Experiment A: compare a TLE at t0 with a TLE whose epoch is ~t0+24h.
-
-Actual Experiment A after March 2026: evaluate a current TLE at a date
-months from its epoch. SGP4 is not valid there. A small number, if it
-ever appeared later, would be an accident.
+In short, "Experiment A" was meant to compare a satellite's position at t0 against roughly t0 + 24 hours. Any real run after March 2026 actually compared a live, current‑day TLE against a satellite state months away from that TLE's real epoch, something SGP4 isn't designed to handle accurately. Any small number that came out of that comparison later would have been pure coincidence.
 
 ---
 
-## 8. Blind spots
+## 8. What the original code didn't account for
 
-### Edge cases
+**Edge cases.** No real handling for an empty catalog, an all‑geostationary catalog, duplicate names, or missing name lines mixing 2‑line and 3‑line TLE formats (a single missing line would desync the whole reading loop). A column of data that never changes would cause a divide‑by‑zero in the z‑score step. A garbled mean‑motion value could produce a negative altitude, with only a broad 200–2000 km range checked afterward. A "no data found" response from Celestrak was treated as if it were just an unusually short, valid TLE. An empty Earth Engine result could silently produce `None`, which would later crash the script. And the Jinju NDVI example area includes ocean, pulling the average down with no land‑only filter.
 
-- Empty catalog, all-GEO catalog, duplicate names, missing name lines
-  (2LE vs 3LE). Original 3-step walk desynchronizes on a missing name.
-- Zero / constant feature column: z-score divides by `std` with no guard.
-- Negative altitude if mean motion is garbage; only a 200–2000 km gate
-  after the fact.
-- Celestrak “No GP data found” HTML/text: treated as a short TLE.
-- GEE empty collection: `median()` then `reduceRegion` can yield `None`,
-  then `stats['NDVI']` crashes.
-- Permission-like: Jinju AOI includes ocean; mean NDVI is pulled down
-  without a land mask.
+**Timing.** Downloading "t24" live meant every run was racing against whatever Celestrak's catalog looked like at that exact moment, so two runs a day apart were really two different experiments sharing the same name. There was also no protection against overwriting results: re‑running just overwrote the same image files in the current folder instead of a dated output folder.
 
-### Race / time
+**Resources.** The actual computational load (about 4,320 time steps across three stations) is small and not a real concern. The one practical issue is `plt.show()` called right after `savefig()`, which hangs indefinitely when run without a display, like on a server.
 
-- Live t24 pull is a time-of-run race against the catalog. Two runs a day
-  apart are different experiments with the same name.
-- No idempotency: re-running overwrites PNGs in cwd, not a dated output dir.
+**Leftover or unnecessary logic.** The invented RF bars and their percentage caps. A hardcoded `normal_max = 5.0` presented as if it were a physical law, when it's really just a policy choice. Feeding both altitude and mean motion into the same anomaly model when they measure closely related things. A leftover Colab‑only `uploaded` reference sitting in a README that otherwise says to just run `python script.py`. And an NDVI description that says "winter to spring vegetation decrease" for a comparison that was actually August to March (late summer to late winter): the point about seasonal confounding is fair, but the season names are wrong.
 
-### Resources
-
-- 4320-element Python datetime list × 3 stations × sun + sat. Fine at
-  this size; no file/session leak except GEE client state.
-- `plt.show()` in scripts that also `savefig` — hangs headless runs.
-
-### Dead / unnecessary logic
-
-- RF bars and caps.
-- `normal_max = 5.0` presented as a physical LEO law. It is a policy.
-- Altitude **and** mean motion as IF features.
-- Colab `uploaded` left in a repo README that says `python script.py`.
-- NDVI change-direction string “겨울→봄 식생 감소” for August→March
-  (late summer → late winter). The season comment is right about the
-  confound and wrong about the month names.
-
-### Domain
-
-YAOGAN-9 / 36413 is a known eccentric 63.4° triplet. IsolationForest
-should flag it relative to SSO-dominated catalogs. Calling that a
-candidate is fair; treating SGP4 residual 0.20 km as “the flag may be a
-false positive” mixes two definitions of anomaly (unusual elements vs.
-maneuver). Unusual elements can be stable for 16 years.
+**Domain understanding.** YAOGAN‑9 (36413) is a known, deliberately eccentric satellite from a 63.4°‑inclination trio. It's reasonable for an anomaly detector to flag it as unusual against a mostly sun‑synchronous catalog. But treating a small 0.20 km SGP4 residual as evidence the flag "might be a false positive" mixes up two different meanings of anomaly: unusual orbital elements versus an actual maneuver. A satellite can have genuinely unusual elements and still fly a stable orbit for sixteen years.
 
 ---
 
@@ -249,70 +121,45 @@ maneuver). Unusual elements can be stable for 16 years.
 
 ### Fixed in this rewrite
 
-- Shared TLE parse + checksum.
-- Remove Colab `uploaded`.
-- Do not use latest TLE as t24 without an epoch window.
-- Correct OWL-Net coordinates; drop Sobaeksan-as-OWL-Net.
-- Stop emitting RF/fusion percentages.
-- Count passes as runs, sample from the TLE epoch.
-- Landsat C2 scale/offset + QA mask on the live path.
-- Figure titles match the claim.
-- contamination labeled as an assumption.
-- Drop collinear mean-motion feature.
-- GEE behind an adapter; offline EO path.
-- Candidate CSV / JSON handoff.
-- Tests for checksum, altitude, epoch window, pass counting, stations.
+- Shared TLE parsing and checksum validation.
+- Removed the Colab‑only `uploaded` dependency entirely.
+- No longer treats the latest available TLE as a valid "24 hours later" snapshot without checking the time gap.
+- Corrected OWL‑Net station coordinates; dropped the non‑OWL‑Net "Sobaeksan" site.
+- Removed the invented RF and fusion percentages completely.
+- Ground‑track passes are now counted as actual passes, sampled from each satellite's real epoch.
+- The live Landsat path now applies the correct scale, offset, and quality mask.
+- Chart titles now match what the chart actually shows.
+- `contamination` is now explicitly labeled as an assumption, not a measured value.
+- Dropped the redundant, closely correlated mean‑motion feature from the anomaly model.
+- Earth Engine access now sits behind its own adapter, with offline as the default.
+- Flagged candidates are now saved and handed off as CSV/JSON.
+- Added real tests for checksum validation, altitude, the epoch time‑gap check, pass counting, and station data.
 
 ### Deferred, and when it becomes dangerous
 
 | Item | Why it can wait | When it becomes dangerous |
 |---|---|---|
-| Real historical TLE archive for a true t24 | No public archive is bundled; the guard already refuses a fake t24 | Publishing a new 0.xx km “validation” number |
-| Pixel-level land mask / seasonal NDVI model | EO is not used as evidence | Anyone cites ΔNDVI next to the TLE flag |
-| Real weather model instead of 0.5 | Geometry is already separated | Citing weather-adjusted ratios as detections |
-| SatSim / light curves / SDR | Stated future work; still no code | Slide language that implies they exist |
-| contamination sensitivity sweep | Demo catalog is tiny | Treating 5% as a measured LEO-anomaly rate |
-| Full 13,893-object reproduce | Needs a dated Celestrak snapshot | Comparing new counts to the poster table |
+| Real historical TLE archive for a true t24 | No public archive is bundled; the guard already refuses a fake t24 | Publishing a new specific "0.xx km" validation number |
+| Pixel‑level land mask / seasonal NDVI model | EO isn't currently used as evidence | Anyone cites a specific ΔNDVI next to the TLE flag as if they're connected |
+| Real weather model instead of the 0.5 discount | Geometry is already cleanly separated from it | Citing the weather‑adjusted ratio as an actual detection rate |
+| SatSim / light curves / passive RF | Stated as future work; still no code | Slide language that implies they already exist |
+| `contamination` sensitivity sweep | Demo catalog is too small to matter | Treating 5% as a real, measured LEO anomaly rate |
+| Full 13,893‑object reproduction | Needs a properly dated Celestrak snapshot | Comparing new counts directly to the old poster table |
 
 ---
 
-## 10. Explainability test
+## 10. Could you explain this to another engineer in five minutes?
 
-Original: you cannot explain the pipeline to another engineer in five
-minutes without saying “ignore the RF bars, ignore the figure title,
-ignore that t24 is not t24, and the anomaly script does not actually
-feed the next script.”
+With the original code, you couldn't explain the pipeline in five minutes without a long list of caveats: ignore the RF bars, ignore the chart title, remember that "t24" isn't really t24, and remember that the anomaly script doesn't actually feed into anything else.
 
-Rewrite: TLE in → optional flags out → one case-study object → SGP4
-only if epochs match → optical windows at real sites → optional NDVI
-demo. That sentence is the architecture.
+With the rewrite, the whole pipeline fits in one sentence: TLE data comes in, optional anomaly flags come out, one case‑study object gets a closer look, SGP4 only runs when the time gap is valid, optical visibility is checked at real station locations, and NDVI is available as an optional demo. That sentence *is* the architecture.
 
-Fast-judgment answers for the original modules:
-
-1. One-sentence responsibility? Only after reading the README footnotes.
-2. Did “auth” seep in? GEE and Colab upload, yes.
-3. Tightly coupled? Duplicated TLE, yes. Coupled as a pipeline? No —
-   which is worse.
-4. Can someone else follow it quickly? The honesty in the READMEs is
-   good; the code still performs the withdrawn claims.
-5. Remove a dependency tomorrow? Not Celestrak, not GEE, not `uploaded`.
-6. Smart explanation, strange runtime? Yes. That was the main finding.
+Quick answers for the original code: could each module's job be described in one sentence? Only after digging through README footnotes. Did access concerns leak into the science code? Yes, through Earth Engine and the Colab upload. Was it too tightly coupled? The duplicated TLE, yes, but coupled together as an actual working pipeline? No, and that was the bigger problem. Could someone follow it quickly? The honesty in the READMEs helps, but the code was still quietly performing claims already withdrawn in writing. Could a dependency be removed tomorrow? Not Celestrak, not Earth Engine, not the Colab upload. Smart explanation, strange runtime? Yes, and that mismatch was the main finding.
 
 ---
 
-## Verification of the rewrite
+## Verifying the rewrite
 
-See `tests/`. They check:
+The tests in `tests/` confirm: YAOGAN‑9's checksum and epoch (2026‑03‑15 17:11 UTC) are correct. Mean altitude comes out to about 1,095.3 km, correctly split into perigee/apogee from its 0.053 eccentricity. The anomaly model's features exclude mean motion. The SGP4 time‑gap check correctly rejects the bundled week‑old reference TLE. Comparing a TLE against itself at zero time difference gives an error of about zero. The Korea station list contains only Bohyun and Daedeok, and Mt. Lemmon is correctly recognized as a western longitude. The pass counter counts actual passes, not raw samples. And the offline NDVI demo is always labeled synthetic and seasonal, never as a real measurement.
 
-- YAOGAN-9 checksum and epoch (2026-03-15 17:11 UTC).
-- Mean altitude ≈ 1095.3 km, perigee/apogee split from e=0.053.
-- IsolationForest features exclude mean motion.
-- SGP4 window rejects the week-old bundled reference.
-- Same-TLE zero-horizon error is ~0.
-- Korea stations are Bohyun + Daedeok; Lemmon is west longitude.
-- Pass counter counts runs.
-- Offline NDVI stays labeled synthetic and seasonal.
-
-What the tests do not claim: reproduction of 695 / 0.20 km / 4.1%.
-Those numbers belonged to a specific catalog pull and a specific
-incorrect station table.
+What these tests do **not** do is reproduce the original 695 / 0.20 km / 4.1% figures. Those numbers came from one specific catalog snapshot and one incorrect station table, and were never meant to be reproducible as originally presented.
